@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8"><title>Matthijs Issa Game</title>
+    <style>
+        body,html { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#0b132b; font-family:'Courier New',monospace; }
+        canvas { display:block; width:100vw; height:100vh; background:linear-gradient(#1c2541,#0b132b); image-rendering:pixelated; }
+        #ui { position:absolute; top:20px; left:50%; transform:translateX(-50%); color:#48cae4; font-size:24px; font-weight:bold; text-shadow:3px 3px 0px #000; pointer-events:none; text-align:center; z-index:5; }
+        .sc { display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(11,19,43,0.95); flex-direction:column; justify-content:center; align-items:center; color:#fff; z-index:10; text-align:center; }
+        #w { border:8px solid #ffb703; } #d { border:8px solid #e63946; }
+        .sc h1 { font-size:45px; text-shadow:4px 4px 0px #000; margin-bottom:15px; }
+        #w h1 { color:#ffb703; } #d h1 { color:#e63946; }
+        .sc p { color:#48cae4; font-size:24px; text-shadow:2px 2px 0px #000; margin-bottom:25px; }
+        .btn { background:#e63946; color:#fff; border:4px solid #b71c1c; padding:15px 35px; font-size:22px; font-weight:bold; cursor:pointer; box-shadow:4px 4px 0px #000; }
+        .btn:hover { background:#ff4d6d; }
+    </style>
+</head>
+<body>
+    <div id="ui">MATTHIJS ISSA GAME</div>
+    <div id="w" class="sc"><h1>JIJ HEBT GEWONNEN! 🎉</h1><p>credits matthijs issa</p></div>
+    <div id="d" class="sc"><h1>JE BENT DOOD GEGAAN</h1><button class="btn" onclick="respawn()">Respawn</button></div>
+    <canvas id="g"></canvas>
+    <script>
+        const canvas = document.getElementById('g'), ctx = canvas.getContext('2d');
+        function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+        window.addEventListener('resize', resize); resize();
+
+        const player = { x:50, y:canvas.height-200, w:56, h:28, vx:0, vy:0, speed:4.5, jump:12, ground:false };
+        const gravity = 0.5, keys = {};
+        let camX = 0, win = false, isDead = false, tick = 0, gY = canvas.height-100;
+
+        // DE VOLLEDIGE OBBY IS WEER TERUG: [x, y, w, type, sx, rg, dir, sp]
+        const lv = [
+            [0,gY,180,0],
+            [260,gY-50,100,0],
+            [420,gY-110,90,0],
+            [580,gY-70,100,1,580,140,1,2.5],
+            [850,gY-130,80,0],
+            [1010,gY-190,60,0],
+            [1140,gY-110,90,1,1140,150,-1,3],
+            [1420,gY-160,80,0],
+            [1580,gY-220,70,0],
+            [1720,gY-140,100,2,1720,40],
+            [1910,gY-80,110,0],
+            [2100,gY-140,70,0],
+            [2250,gY-210,80,1,2250,120,1,3],
+            [2480,gY-130,60,2,2480,30],
+            [2620,gY-70,90,0],
+            [2780,gY-130,60,0],
+            [2910,gY-200,60,0],
+            [3050,gY-110,100,1,3050,180,-1,3.5],
+            [3350,gY-160,70,0],
+            [3500,gY-100,60,2,3500,30],
+            [3640,gY-150,250,3]
+        ];
+        
+        const platforms = lv.map(p => ({ x:p[0], y:p[1], w:p[2], h:24, t:p[3], sx:p[4]||0, rg:p[5]||0, dir:p[6]||0, sp:p[7]||0, tm:0, st:false }));
+        platforms[0].h = 200; platforms[platforms.length-1].h = 400;
+
+        window.addEventListener('keydown', e => { if(!isDead && !win) keys[e.code] = true; });
+        window.addEventListener('keyup', e => keys[e.code] = false);
+
+        function respawn() {
+            isDead = false; document.getElementById('d').style.display = 'none'; document.getElementById('ui').style.display = 'block';
+            player.x = 50; player.y = canvas.height-200; player.vx = player.vy = 0;
+            platforms.forEach(p => { if(p.t===2) { p.y=p.sx; p.tm=0; p.st=false; } });
+        }
+
+        function loop() {
+            if (win || isDead) return; tick += 0.15;
+            player.vx = keys['KeyD']||keys['ArrowRight'] ? player.speed : (keys['KeyA']||keys['ArrowLeft'] ? -player.speed : 0);
+            if ((keys['Space']||keys['KeyW']||keys['ArrowUp']) && player.ground) { player.vy = -player.jump; player.ground = false; }
+            player.vy += gravity; player.x += player.vx; player.y += player.vy; player.ground = false; if (player.x < 0) player.x = 0;
+
+            platforms.forEach(p => {
+                if (p.t === 1) { p.x += p.sp * p.dir; if (p.x > p.sx + p.rg || p.x < p.sx) p.dir *= -1; }
+                if (p.t === 2 && p.st) { p.tm++; if (p.tm > p.sp) p.y += 8; }
+                if (player.x < p.x + p.w && player.x + player.w > p.x && player.y < p.y + p.h && player.y + player.h > p.y) {
+                    if (player.vy > 0 && player.y + player.h - player.vy <= p.y + 8) {
+                        player.y = p.y - player.h; player.vy = 0; player.ground = true;
+                        if (p.t === 1) player.x += p.sp * p.dir; if (p.t === 2) p.st = true;
+                        if (p.t === 3) { win = true; document.getElementById('ui').style.display = 'none'; document.getElementById('w').style.display = 'flex'; }
+                    }
+                }
+            });
+
+            if (player.y > canvas.height) { isDead = true; for(let k in keys) keys[k]=false; document.getElementById('ui').style.display = 'none'; document.getElementById('d').style.display = 'flex'; }
+            camX = Math.max(0, player.x - canvas.width / 4);
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.save(); ctx.translate(-camX, 0);
+            ctx.fillStyle = '#ff3333'; ctx.fillRect(camX, canvas.height - 16, canvas.width, 16);
+            ctx.fillStyle = '#cc0000'; ctx.fillRect(camX, canvas.height - 8, canvas.width, 8);
+
+            platforms.forEach(p => {
+                let c1 = '#4a5568', c2 = '#2d3748';
+                if (p.t === 3) { c1 = '#ffb703'; c2 = '#fb8500'; } if (p.t === 1) { c1 = '#00b4d8'; c2 = '#0077b6'; } if (p.t === 2) { c1 = '#e63946'; c2 = '#d90429'; }
+                ctx.fillStyle = p.t === 2 && p.st ? '#f1faee' : c1; ctx.fillRect(p.x, p.y, p.w, p.h);
+                ctx.fillStyle = c2; ctx.fillRect(p.x, p.y + p.h - 6, p.w, 6);
+                ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.fillRect(p.x, p.y, p.w, 4);
+            });
+
+            ctx.save(); ctx.translate(player.x, player.y); if (player.vx < 0) { ctx.translate(player.w, 0); ctx.scale(-1, 1); }
+            const pz = 2; function drawP(x,y,w,h,c) { ctx.fillStyle=c; ctx.fillRect(x*pz,y*pz,w*pz,h*pz); }
+            drawP(2,2,24,10,'#0096c7'); drawP(4,1,20,1,'#0077b6'); drawP(2,0,22,2,'#03045e'); drawP(24,2,2,3,'#03045e'); drawP(4,12,18,2,'#edf2f7'); drawP(22,9,4,3,'#edf2f7');
+            drawP(10,5,1,4,'#023e8a'); drawP(12,5,1,4,'#023e8a'); drawP(14,5,1,4,'#023e8a'); drawP(10,-4,4,4,'#03045e'); drawP(8,-2,2,2,'#03045e'); drawP(12,-2,4,2,'#0077b6');
+            let tO = Math.round(Math.sin(tick)*1.5); drawP(-3,2+tO,3,8,'#03045e'); drawP(0,4+tO,2,5,'#0096c7'); drawP(-5,0+tO,2,3,'#03045e'); drawP(-5,9+tO,2,3,'#03045e');
+            drawP(20,2,5,3,'#f72585'); drawP(23,3,1,1,'#fff'); drawP(16,2,4,1,'#2b2d42'); drawP(21,9,1,1,'#fff'); drawP(23,9,1,1,'#fff');
+            ctx.restore(); ctx.restore();
+        }
+        function run() { loop(); requestAnimationFrame(run); } run();
+    </script>
+</body>
+</html>
